@@ -4,6 +4,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <errno.h>
+#define _GNU_SOURCE /* for F_SETOWN */
 #include <unistd.h>
 #include <fcntl.h>
 #include <endian.h>
@@ -25,12 +26,17 @@
 #define nitems(_a) (sizeof((_a)) / sizeof((_a)[0]))
 #endif
 
+#define _OFFSET_NR 0
+#define _OFFSET_ARCH _OFFSET_NR + sizeof(int)
+#define _OFFSET_IP _OFFSET_ARCH + sizeof(__u32)
+#define _OFFSET_ARG(idx) _OFFSET_IP + (sizeof(__u32) * (idx))
+
 #if __BYTE_ORDER == __LITTLE_ENDIAN
 #define _LO_ARG(idx) \
-	offsetof(struct seccomp_data, args[(idx)])
+	_OFFSET_ARG((idx))
 #elif __BYTE_ORDER == __BIG_ENDIAN
 #define _LO_ARG(idx) \
-	offsetof(struct seccomp_data, args[(idx)]) + sizeof(__u32)
+	_OFFSET_ARG((idx)) + sizeof(__u32)
 #else
 #error "Unknown endianness"
 #endif
@@ -38,11 +44,11 @@
 #if __BYTE_ORDER == __LITTLE_ENDIAN
 # define ENDIAN(_lo, _hi) _lo, _hi
 # define _HI_ARG(idx) \
-	offsetof(struct seccomp_data, args[(idx)]) + sizeof(__u32)
+	_OFFSET_ARG((idx)) + sizeof(__u32)
 #elif __BYTE_ORDER == __BIG_ENDIAN
 # define ENDIAN(_lo, _hi) _hi, _lo
 # define _HI_ARG(idx) \
-	offsetof(struct seccomp_data, args[(idx)])
+	_OFFSET_ARG((idx))
 #else
 # error "Unknown endianness"
 #endif
@@ -55,12 +61,10 @@ union arg64 {
 };
 
 #define _LOAD_SYSCALL_NR \
-	*fp++ = (struct sock_filter)BPF_STMT(BPF_LD+BPF_W+BPF_ABS, \
-	    offsetof(struct seccomp_data, nr))
+	*fp++ = (struct sock_filter)BPF_STMT(BPF_LD+BPF_W+BPF_ABS, _OFFSET_NR);
 
 #define _LOAD_ARCH \
-	*fp++ = (struct sock_filter)BPF_STMT(BPF_LD+BPF_W+BPF_ABS, \
-	    offsetof(struct seccomp_data, arch))
+	*fp++ = (struct sock_filter)BPF_STMT(BPF_LD+BPF_W+BPF_ABS, _OFFSET_ARCH)
 
 #define _ARG32(idx) \
 	*fp++ = (struct sock_filter)BPF_STMT(BPF_LD+BPF_W+BPF_ABS, _LO_ARG(idx))
@@ -72,23 +76,27 @@ union arg64 {
 	*fp++ = (struct sock_filter)BPF_STMT(BPF_ST, 1)
 
 #define _JUMP_EQ(val, jt, jf) \
-	*fp++ = (struct sock_filter)BPF_JUMP(BPF_JMP+BPF_JEQ+BPF_K, (val), (jt), (jf))
+	*fp = (struct sock_filter)BPF_JUMP(BPF_JMP+BPF_JEQ+BPF_K, (val), (jt), (jf));\
+	fp++
 
 #define _JUMP_EQ64(val, jt, jf) \
-	*fp++ = (struct sock_filter)BPF_JUMP(BPF_JMP+BPF_JEQ+BPF_K, \
+	*fp = (struct sock_filter)BPF_JUMP(BPF_JMP+BPF_JEQ+BPF_K, \
 	    ((union arg64){.u64 = (val)}).hi32, 0, (jf)),           \
+	fp++, \
 	*fp++ = (struct sock_filter)BPF_STMT(BPF_LD+BPF_MEM, 0),    \
-	*fp++ = (struct sock_filter)BPF_JUMP(BPF_JMP+BPF_JEQ+BPF_K, \
-	    ((union arg64){.u64 = (val)}).lo32, (jt), (jf))
+	*fp = (struct sock_filter)BPF_JUMP(BPF_JMP+BPF_JEQ+BPF_K, \
+	    ((union arg64){.u64 = (val)}).lo32, (jt), (jf)),\
+	fp++
 
-#define _JUMP(val) \
-	*fp++ = (struct sock_filter)BPF_JUMP(BPF_JMP+BPF_JA, (val), 0xFF, 0xFF)
+#define _JUMP(jmp) \
+	*fp = (struct sock_filter)BPF_JUMP(BPF_JMP+BPF_JA, (jmp), 0xFF, 0xFF),\
+	fp++
 
 #define _RET(x) \
 	*fp++ = (struct sock_filter)BPF_STMT(BPF_RET+BPF_K, (x))
 
 #define _END \
-	len-(fp-fprog->filter)-1
+	len-1-(fp-fprog->filter)-1
 
 struct promise {
 	char *name;
@@ -360,8 +368,9 @@ pledge_whitelist(uint64_t flags)
 	_JUMP_EQ(AUDIT_ARCH_X86_64, 0, _END-1);
 	/* compare syscall numbers */
 	_LOAD_SYSCALL_NR;
-	for (i = 0; i < num; i++)
+	for (i = 0; i < num; i++) {
 		_JUMP_EQ(calls[i], _END, 0);
+	}
 	/* no match */
 #ifndef NODEBUG
 	_RET((flags & PLEDGE_DEBUG) ? SECCOMP_RET_TRAP : SECCOMP_RET_KILL);
@@ -416,8 +425,9 @@ pledge_blacklist(uint64_t flags, uint64_t oldflags)
 
 	/* compare all syscall numbers */
 	_LOAD_SYSCALL_NR;
-	for (i = 0; i < num; i++)
+	for (i = 0; i < num; i++) {
 		_JUMP_EQ(calls[i], _END, 0);
+	}
 	/* no match */
 	_RET(SECCOMP_RET_ALLOW);
 	/* matching syscall jump here */
@@ -453,16 +463,15 @@ pledge_filter(uint64_t flags, uint64_t oldflags)
 	if (allow_prctl)
 		len += 4;
 
-	if (allow_socket)
+	if (allow_socket) {
 		len += 3;
-
-	/* AF_INET[6]? */
-	if ((flags&PLEDGE_INET))
-		len += 2;
-
-	/* AF_UNIX */
-	if ((flags&PLEDGE_UNIX))
-		len += 1;
+		/* AF_INET[6]? */
+		if ((flags&PLEDGE_INET))
+			len += 2;
+		/* AF_UNIX */
+		if ((flags&PLEDGE_UNIX))
+			len += 1;
+	}
 
 	if (allow_selfkill)
 		len += 11;

@@ -1,5 +1,5 @@
 .error : This Makefile needs GNU make
-CFLAGS+=-g -O2 -Wall -Wno-switch -Wextra -fstack-protector-strong -D_FORTIFY_SOURCE=2
+CFLAGS+=-g -O2 -Wall -pedantic -Wall -Wextra -fstack-protector-strong -D_FORTIFY_SOURCE=2
 
 DESTDIR=
 PREFIX=/usr/local
@@ -32,10 +32,10 @@ ns:
 
 %.so:
 
-clean: FRC
+clean:
 	-rm -f $(ALL) *.o
 
-install: FRC all
+install: all
 	mkdir -p $(DESTDIR)$(BINDIR) \
 		$(DESTDIR)$(LIBDIR) \
 		$(DESTDIR)$(INCDIR)
@@ -46,4 +46,4 @@ install: FRC all
 	# install -m0644 libnewns.a libnewns.so $(DESTDIR)$(LIBDIR)
 	# install -m0644 newns.h $(DESTDIR)$(INCDIR)
 
-FRC:
+.PHONY: all clean install
