@@ -1,5 +1,3 @@
-#include <stdint.h>
-
 #define PLEDGED         0x1000000000000000ULL
 #define PLEDGE_ALWAYS   0xffffffffffffffffULL
 #define PLEDGE_DEBUG    0x0000000000000001ULL

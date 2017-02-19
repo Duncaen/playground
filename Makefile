@@ -1,5 +1,6 @@
 .error : This Makefile needs GNU make
-CFLAGS+=-g -O2 -Wall -pedantic -Wall -Wextra -fstack-protector-strong -D_FORTIFY_SOURCE=2
+CFLAGS+=-std=c99 -g -O2 -Wall -pedantic -Wall -Wextra -fstack-protector-strong
+CPPFLAGS+=-D_DEFAULT_SOURCE -D_FORTIFY_SOURCE=2
 
 DESTDIR=
 PREFIX=/usr/local
@@ -17,6 +18,9 @@ all: $(ALL)
 $(PROGS) : % : %.o
 $(LIBS:=.a) : %.a : %.o
 $(LIBS:=.so) : %.so : %.o
+
+libpledge.o : pledge_syscalls.h
+libpledge.o pledge.o : pledge.h
 
 pledge: libpledge.a
 # newns: libnewns.a
