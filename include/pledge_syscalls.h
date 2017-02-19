@@ -79,6 +79,7 @@ const uint64_t pledge_syscalls[] = {
 	[SYS_alarm] = PLEDGE_STDIO,
 	[SYS_pause] = PLEDGE_STDIO,
 	[SYS_time] = PLEDGE_STDIO,
+	[SYS_set_tid_address] = PLEDGE_STDIO,
 
 	/* events,poll */
 #ifdef SYS__newselect
@@ -221,7 +222,6 @@ const uint64_t pledge_syscalls[] = {
 	[SYS_sched_setparam] = PLEDGE_PROC,
 	[SYS_sched_setscheduler] = PLEDGE_PROC,
 	[SYS_sched_yield] = PLEDGE_PROC,
-	[SYS_set_tid_address] = PLEDGE_PROC,
 	[SYS_set_robust_list] = PLEDGE_PROC,
 	[SYS_get_robust_list] = PLEDGE_PROC,
 	[SYS_unshare] = PLEDGE_PROC,
