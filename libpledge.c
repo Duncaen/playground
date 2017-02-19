@@ -602,23 +602,6 @@ pledge_flags(const char *promises)
 
 static uint64_t currflags = 0;
 
-/*
- * pledge() makes use of seccomp layering, the first pledge call creates
- * a whitelist white allowed systemcalls and if necessary a second layer
- * with filters that look at arguments of systemcalls.
- * further pledge() calls blacklist systemcalls that are not part of
- * the new promises and adds the filter layaer if necessary.
- * The BPF filters are as small as possible and never blacklist syscalls
- * twice and never blacklists syscalls that were not initially whitelisted.
- *
- * There are some differences to the OpenBSD `pledge(2)` syscall.
- * The OpenBSD implementation drops filters if `execve(2)` is called, this
- * is not possible at this time with `seccomp(2)`.
- * Furthermore in OpenBSDs implementation it is possible to use syscalls
- * that operate in specific paths like /tmp without priviously promising it.
- * The `paths` argument for `pledge(2)` from OpenBSDs pledge is deprecated
- * and `pledge(2)` returns `EINVAL` if its not `NULL` this api does the same.
- */
 int
 pledge(const char *promises, const char *paths[])
 {

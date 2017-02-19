@@ -11,7 +11,7 @@ not even compile and some docs on how or what it should do.
 Usage
 -----
 
-To just restrict the allowed syscalls:
+To just restrict the allowed systemcalls:
 
 	$ pledge -p "proc rpath" sh
 
@@ -35,24 +35,50 @@ Install
 libpledge
 ---------
 
-Create a seccomp BPF filter that whitelists systemcalls.
+The main API is the `pledge(2)` function, the other functions are just a bonus
+that might be useful but aren't in most cases, its suggested to only use this
+function.
 
-`struct sock_fprog *pledge_whitelist(uint64_t flags);`
+`pledge(2)` makes use of seccomp layering, the first `pledge(2)` call creates
+a whitelist white allowed systemcalls and if necessary a second layer with
+filters that look at arguments of systemcalls. Subsequent `pledge(2)` calls
+blacklist systemcalls that are not part of the new promises and adds the
+filter layer if necessary. The BPF filters are as small as possible and
+never blacklist systemcalls twice and never blacklists systemcalls that
+were not initially whitelisted.
 
-Create a seccomp BPF filter that blacklists previously whitelisted systemcalls.
+There are some differences to the OpenBSD `pledge(2)` systemcall.
+The OpenBSD implementation drops filters if `execve(2)` is called,
+this is not possible at this time with `seccomp(2)`.
+Furthermore in OpenBSDs implementation it is possible to use systemcalls
+that operate in specific paths like `/tmp` without priviously promising it.
+The `paths` argument for `pledge(2)` from OpenBSDs pledge is deprecated
+and `pledge(2)` returns `EINVAL` if its not `NULL` this API does the same.
 
-`struct sock_fprog *pledge_blacklist(uint64_t flags, uint64_t oldflags);`
 
-Create a seccomp BPF filter that filters previously whitelisted syscalls based
-on its arguments.
+`int pledge(const char *, const char *[]);`
 
-`struct sock_fprog *pledge_filter(uint64_t flags, uint64_t oldflags);`
+	Restrict systemcalls based on the supplied `promises` string.
+	Subsequent calls reduce the systemcalls further.
 
-Convert a list of space separated `promises` to flags.
 
 `uint64_t pledge_flags(const char *);`
 
-Restrict systemcalls based on the supplied `promises` string. This function is
-the main function and should be the only necessary function in most cases.
+	Converts a list of space separated `promises` to flags.
 
-`int pledge(const char *, const char *[]);`
+
+`struct sock_fprog *pledge_whitelist(uint64_t flags);`
+
+	Creates a `seccomp(2)` `BPF(2)` filter program that whitelists systemcalls.
+
+
+`struct sock_fprog *pledge_blacklist(uint64_t flags, uint64_t oldflags);`
+
+	Creates a `seccomp(2)` `BPF(2)` filter program to blacklists previously
+	whitelisted systemcalls.
+
+
+`struct sock_fprog *pledge_filter(uint64_t flags, uint64_t oldflags);`
+
+	Creates a `seccomp` `BPF(2)` filter program that filters previously
+	whitelisted systemcalls based on its arguments.
