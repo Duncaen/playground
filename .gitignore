@@ -1,4 +1,4 @@
 *.[ao]
 *.so
-newns
-pledge
+./newns
+./pledge

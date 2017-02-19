@@ -33,6 +33,9 @@ options:
 	@echo "LDFLAGS = ${LDFLAGS}"
 	@echo "CC      = ${CC}"
 
+tests:
+	make -C tests/pledge
+
 clean:
 	-rm -f $(ALL) *.o
 
@@ -47,4 +50,4 @@ install: all
 	# install -m0644 libnewns.a libnewns.so $(DESTDIR)$(LIBDIR)
 	# install -m0644 newns.h $(DESTDIR)$(INCDIR)
 
-.PHONY: all options clean install
+.PHONY: all options tests clean install
