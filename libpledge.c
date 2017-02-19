@@ -121,8 +121,13 @@ static const struct promise strpromises[] = {
 	{ "stdio",	PLEDGE_STDIO },
 	{ "unix",	PLEDGE_UNIX },
 	{ "wpath",	PLEDGE_WPATH },
-	{ "debug",	PLEDGE_DEBUG},
+	{ "debug",	PLEDGE_DEBUG },
 	{ "verbose",	PLEDGE_VERBOSE },
+	{ "ipc",	 PLEDGE_IPC },
+	{ "emul",	 PLEDGE_EMUL },
+	{ "mount",	 PLEDGE_MOUNT },
+	{ "key",	 PLEDGE_KEY },
+	{ "kern",	 PLEDGE_KERN },
 	{ 0, 0 },
 };
 
@@ -149,6 +154,7 @@ const uint64_t pledge_syscalls[] = {
 	[SYS_getrusage] = PLEDGE_STDIO,
 	[SYS_clock_getres] = PLEDGE_STDIO,
 	[SYS_clock_gettime] = PLEDGE_STDIO,
+	[SYS_clock_nanosleep] = PLEDGE_STDIO,
 	[SYS_getpid] = PLEDGE_STDIO,
 	[SYS_uname] = PLEDGE_STDIO,
 	[SYS_sysinfo] = PLEDGE_STDIO,
@@ -197,21 +203,33 @@ const uint64_t pledge_syscalls[] = {
 	[SYS_rt_sigaction] = PLEDGE_STDIO,
 	[SYS_rt_sigreturn] = PLEDGE_STDIO,
 	[SYS_rt_sigpending] = PLEDGE_STDIO,
+#ifdef SYS_sigreturn
+	[SYS_sigreturn]
+#endif
 	[SYS_getitimer] = PLEDGE_STDIO,
 	[SYS_setitimer] = PLEDGE_STDIO,
 	[SYS_alarm] = PLEDGE_STDIO,
-	[SYS_poll] = PLEDGE_STDIO,
-	[SYS_ppoll] = PLEDGE_STDIO,
-	[SYS_eventfd] = PLEDGE_STDIO,
-	[SYS_epoll_create] = PLEDGE_STDIO,
+	[SYS_pause] = PLEDGE_STDIO,
+	[SYS_time] = PLEDGE_STDIO,
+
+	/* events,poll */
+#ifdef SYS__newselect
+	[SYS__newselect] = PLEDGE_STDIO,
+#endif
 	[SYS_epoll_create1] = PLEDGE_STDIO,
+	[SYS_epoll_create] = PLEDGE_STDIO,
 	[SYS_epoll_ctl] = PLEDGE_STDIO,
 	[SYS_epoll_ctl_old] = PLEDGE_STDIO,
 	[SYS_epoll_pwait] = PLEDGE_STDIO,
 	[SYS_epoll_wait] = PLEDGE_STDIO,
 	[SYS_epoll_wait_old] = PLEDGE_STDIO,
-	[SYS_select] = PLEDGE_STDIO,
+	[SYS_eventfd2] = PLEDGE_STDIO,
+	[SYS_eventfd] = PLEDGE_STDIO,
+	[SYS_poll] = PLEDGE_STDIO,
+	[SYS_ppoll] = PLEDGE_STDIO,
 	[SYS_pselect6] = PLEDGE_STDIO,
+	[SYS_select] = PLEDGE_STDIO,
+
 	[SYS_fstat] = PLEDGE_STDIO,
 	[SYS_fsync] = PLEDGE_STDIO,
 	[SYS_setsockopt] = PLEDGE_STDIO,
@@ -239,7 +257,36 @@ const uint64_t pledge_syscalls[] = {
 	[SYS_access] = PLEDGE_STDIO,
 	[SYS_readlink] = PLEDGE_STDIO,
 
+	/* ipc */
+	[SYS_memfd_create] = PLEDGE_IPC,
+	[SYS_mq_getsetattr] = PLEDGE_IPC,
+	[SYS_mq_notify] = PLEDGE_IPC,
+	[SYS_mq_open] = PLEDGE_IPC,
+	[SYS_mq_timedreceive] = PLEDGE_IPC,
+	[SYS_mq_timedsend] = PLEDGE_IPC,
+	[SYS_mq_unlink] = PLEDGE_IPC,
+	[SYS_msgctl] = PLEDGE_IPC,
+	[SYS_msgget] = PLEDGE_IPC,
+	[SYS_msgrcv] = PLEDGE_IPC,
+	[SYS_msgsnd] = PLEDGE_IPC,
+	[SYS_process_vm_readv] = PLEDGE_IPC,
+	[SYS_process_vm_writev] = PLEDGE_IPC,
+	[SYS_semctl] = PLEDGE_IPC,
+	[SYS_semget] = PLEDGE_IPC,
+	[SYS_semop] = PLEDGE_IPC,
+	[SYS_semtimedop] = PLEDGE_IPC,
+	[SYS_shmat] = PLEDGE_IPC,
+	[SYS_shmctl] = PLEDGE_IPC,
+	[SYS_shmdt] = PLEDGE_IPC,
+	[SYS_shmget] = PLEDGE_IPC,
+
+	[SYS_adjtimex] = PLEDGE_SETTIME,
+	[SYS_clock_adjtime] = PLEDGE_SETTIME,
+	[SYS_clock_settime] = PLEDGE_SETTIME,
 	[SYS_settimeofday] = PLEDGE_SETTIME,
+#ifdef SYS_stime
+	[SYS_stime] = PLEDGE_SETTIME,
+#endif
 
 	[SYS_chdir] = PLEDGE_RPATH,
 	[SYS_openat] = PLEDGE_RPATH | PLEDGE_WPATH,
@@ -289,15 +336,29 @@ const uint64_t pledge_syscalls[] = {
 	[SYS_lchown] = PLEDGE_CHOWN,
 	[SYS_fchown] = PLEDGE_CHOWN,
 
+	[SYS_arch_prctl] = PLEDGE_PROC,
 	[SYS_clone] = PLEDGE_PROC,
 	[SYS_fork] = PLEDGE_PROC,
-	[SYS_vfork] = PLEDGE_PROC,
-	[SYS_unshare] = PLEDGE_PROC,
+	[SYS_setns] = PLEDGE_PROC,
 	[SYS_setpgid] = PLEDGE_PROC,
 	[SYS_setsid] = PLEDGE_PROC,
+	[SYS_sched_get_priority_max] = PLEDGE_PROC,
+	[SYS_sched_get_priority_min] = PLEDGE_PROC,
+	[SYS_sched_getaffinity] = PLEDGE_PROC,
+	[SYS_sched_getattr] = PLEDGE_PROC,
+	[SYS_sched_getparam] = PLEDGE_PROC,
+	[SYS_sched_getscheduler] = PLEDGE_PROC,
+	[SYS_sched_rr_get_interval] = PLEDGE_PROC,
+	[SYS_sched_setaffinity] = PLEDGE_PROC,
+	[SYS_sched_setattr] = PLEDGE_PROC,
+	[SYS_sched_setparam] = PLEDGE_PROC,
+	[SYS_sched_setscheduler] = PLEDGE_PROC,
+	[SYS_sched_yield] = PLEDGE_PROC,
 	[SYS_set_tid_address] = PLEDGE_PROC,
 	[SYS_set_robust_list] = PLEDGE_PROC,
 	[SYS_get_robust_list] = PLEDGE_PROC,
+	[SYS_unshare] = PLEDGE_PROC,
+	[SYS_vfork] = PLEDGE_PROC,
 
 	[SYS_setrlimit] = PLEDGE_PROC | PLEDGE_ID,
 	[SYS_prlimit64] = PLEDGE_PROC | PLEDGE_ID,
@@ -313,7 +374,7 @@ const uint64_t pledge_syscalls[] = {
 	[SYS_setgroups] = PLEDGE_ID,
 
 	[SYS_execve] = PLEDGE_EXEC,
-	[SYS_arch_prctl] = PLEDGE_EXEC,
+	[SYS_execveat] = PLEDGE_EXEC,
 
 	[SYS_socket] = PLEDGE_INET | PLEDGE_UNIX,
 	[SYS_connect] = PLEDGE_INET | PLEDGE_UNIX,
@@ -326,6 +387,38 @@ const uint64_t pledge_syscalls[] = {
 	[SYS_getpeername] = PLEDGE_INET | PLEDGE_UNIX,
 
 	[SYS_flock] = PLEDGE_FLOCK,
+
+	[SYS_modify_ldt] = PLEDGE_EMUL,
+#ifdef SYS_subpage_prot
+	[SYS_subpage_prot] = PLEDGE_EMUL,
+#endif
+#ifdef SYS_switch_edian
+	[SYS_switch_edian] = PLEDGE_EMUL,
+#endif
+#ifdef SYS_vm86
+	[SYS_vm86] = PLEDGE_EMUL,
+#endif
+#ifdef SYS_vm86old
+	[SYS_vm86old] = PLEDGE_EMUL,
+#endif
+
+	[SYS_chroot] = PLEDGE_MOUNT,
+	[SYS_mount] = PLEDGE_MOUNT,
+	[SYS_pivot_root] = PLEDGE_MOUNT,
+	[SYS_swapoff] = PLEDGE_MOUNT,
+	[SYS_swapon] = PLEDGE_MOUNT,
+	[SYS_umount2] = PLEDGE_MOUNT,
+#ifdef SYS_umount
+	[SYS_umount] = PLEDGE_MOUNT,
+#endif
+
+	[SYS_add_key] = PLEDGE_KEY,
+	[SYS_keyctl] = PLEDGE_KEY,
+	[SYS_request_key] = PLEDGE_KEY,
+
+	[SYS_delete_module] = PLEDGE_KERN,
+	[SYS_finit_module] = PLEDGE_KERN,
+	[SYS_init_module] = PLEDGE_KERN,
 };
 
 
