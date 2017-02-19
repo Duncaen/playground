@@ -21,6 +21,8 @@ enum {
 	PLEDGE_SETTIME	= 0x008000,
 	PLEDGE_UNIX	= 0x010000,
 	PLEDGE_CHOWNUID	= 0x020000,
+	PLEDGE_DEBUG	= 0x040000,
+	PLEDGE_VERBOSE	= 0x080000,
 };
 
 struct sock_fprog *pledge_whitelist(uint64_t);

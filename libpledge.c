@@ -113,6 +113,8 @@ static const struct promise strpromises[] = {
 	{ "stdio",	PLEDGE_STDIO },
 	{ "unix",	PLEDGE_UNIX },
 	{ "wpath",	PLEDGE_WPATH },
+	{ "debug",	PLEDGE_DEBUG},
+	{ "verbose",	PLEDGE_VERBOSE },
 	{ 0, 0 },
 };
 
@@ -333,8 +335,9 @@ pledge_whitelist(uint64_t flags)
 		if (!(flags & pledge_syscalls[i]))
 			continue;
 		calls[num++] = i;
-#ifdef TEST
-		fprintf(stderr, "whitelist syscall %ld\n", i);
+#ifndef NOVERBOSE
+		if (flags & PLEDGE_VERBOSE)
+			fprintf(stderr, "whitelist syscall %ld\n", i);
 #endif
 	}
 
@@ -360,7 +363,11 @@ pledge_whitelist(uint64_t flags)
 	for (i = 0; i < num; i++)
 		_JUMP_EQ(calls[i], _END, 0);
 	/* no match */
+#ifndef NODEBUG
+	_RET((flags & PLEDGE_DEBUG) ? SECCOMP_RET_TRAP : SECCOMP_RET_KILL);
+#else
 	_RET(SECCOMP_RET_KILL);
+#endif
 	/* matching syscall jump here */
 	_RET(SECCOMP_RET_ALLOW);
 
@@ -383,8 +390,9 @@ pledge_blacklist(uint64_t flags, uint64_t oldflags)
 		if ((flags & pledge_syscalls[i]) || !(oldflags & pledge_syscalls[i]))
 			continue;
 		calls[num++] = i;
-#ifdef TEST
-		fprintf(stderr, "blacklist syscall %ld\n", i);
+#ifndef NOVERBOSE
+		if (flags & PLEDGE_VERBOSE)
+			fprintf(stderr, "blacklist syscall %ld\n", i);
 #endif
 	}
 
@@ -413,7 +421,11 @@ pledge_blacklist(uint64_t flags, uint64_t oldflags)
 	/* no match */
 	_RET(SECCOMP_RET_ALLOW);
 	/* matching syscall jump here */
+#ifndef NODEBUG
+	_RET((flags & PLEDGE_DEBUG) ? SECCOMP_RET_TRAP : SECCOMP_RET_KILL);
+#else
 	_RET(SECCOMP_RET_KILL);
+#endif
 
 	return fprog;
 }
@@ -566,10 +578,10 @@ pledge_filter(uint64_t flags, uint64_t oldflags)
 	/* no permissions */
 	_RET(SECCOMP_RET_ERRNO|(EPERM & SECCOMP_RET_DATA));
 	/* matching syscall jump here */
+#ifndef NODEBUG
+	_RET((flags & PLEDGE_DEBUG) ? SECCOMP_RET_TRAP : SECCOMP_RET_KILL);
+#else
 	_RET(SECCOMP_RET_KILL);
-
-#if TEST
-	printf("length=%ld expected=%ld\n", (fp-fprog->filter), len);
 #endif
 
 	return fprog;
@@ -608,10 +620,6 @@ pledge(const char *promises, const char *paths[])
 	struct sock_fprog *filterprog;
 	uint64_t flags;
 	int rv = 0;
-
-#if TEST
-	printf("pledge(\"%s\", 0)\n", promises);
-#endif
 
 	if (paths) {
 		errno = EINVAL;
