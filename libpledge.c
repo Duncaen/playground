@@ -19,6 +19,8 @@
 #include <linux/seccomp.h>
 #include <linux/audit.h>
 
+#include "pledge.h"
+
 #ifndef nitems
 #define nitems(_a) (sizeof((_a)) / sizeof((_a)[0]))
 #endif
@@ -87,29 +89,6 @@ union arg64 {
 
 #define _END \
 	len-(fp-fprog->filter)-1
-
-enum {
-	PLEDGED		= 0x100000,
-	PLEDGE_ALWAYS	= 0xffffff,
-	PLEDGE_IOCTL	= 0x010001,
-	PLEDGE_RPATH	= 0x000002,
-	PLEDGE_WPATH	= 0x000004,
-	PLEDGE_CPATH	= 0x000008,
-	PLEDGE_STDIO	= 0x000010,
-	PLEDGE_CHOWN	= 0x000020,
-	PLEDGE_DPATH	= 0x000040,
-	PLEDGE_DRM	= 0x000080,
-	PLEDGE_EXEC	= 0x000100,
-	PLEDGE_FATTR	= 0x000200,
-	PLEDGE_FLOCK	= 0x000400,
-	PLEDGE_GETPW	= 0x000800,
-	PLEDGE_INET	= 0x001000,
-	PLEDGE_PROC	= 0x002000,
-	PLEDGE_ID	= 0x004000,
-	PLEDGE_SETTIME	= 0x008000,
-	PLEDGE_UNIX	= 0x008000,
-	PLEDGE_CHOWNUID	= 0x010000,
-};
 
 struct promise {
 	char *name;
@@ -339,7 +318,8 @@ const uint64_t pledge_syscalls[] = {
 	[SYS_flock] = PLEDGE_FLOCK,
 };
 
-static struct sock_fprog *
+
+struct sock_fprog *
 pledge_whitelist(uint64_t flags)
 {
 	uint64_t len, num, i;
@@ -387,7 +367,7 @@ pledge_whitelist(uint64_t flags)
 	return fprog;
 }
 
-static struct sock_fprog *
+struct sock_fprog *
 pledge_blacklist(uint64_t flags, uint64_t oldflags)
 {
 	uint64_t len, num, i;
@@ -438,7 +418,7 @@ pledge_blacklist(uint64_t flags, uint64_t oldflags)
 	return fprog;
 }
 
-static struct sock_fprog  *
+struct sock_fprog *
 pledge_filter(uint64_t flags, uint64_t oldflags)
 {
 	struct sock_fprog *fprog;
@@ -595,6 +575,31 @@ pledge_filter(uint64_t flags, uint64_t oldflags)
 	return fprog;
 }
 
+uint64_t
+pledge_flags(const char *promises)
+{
+	uint64_t flags, f;
+	const struct promise *pp;
+	char *buf, *p;
+
+	flags = 0;
+	buf = strdup(promises);
+	for ((p = strtok(buf, " ")); p; (p = strtok(0, " "))) {
+		f = 0;
+		for (pp = strpromises; pp->name; pp++) {
+			if (strcmp(p, pp->name) == 0)
+				f = pp->flags;
+		}
+		if (!f) {
+			free(buf);
+			return 0;
+		}
+		flags |= f;
+	}
+	free(buf);
+	return flags;
+}
+
 static uint64_t currflags = 0;
 
 /*
@@ -617,11 +622,9 @@ static uint64_t currflags = 0;
 int
 pledge(const char *promises, const char *paths[])
 {
-	const struct promise *pp;
 	struct sock_fprog *filterprog;
-	uint64_t flags, f;
+	uint64_t flags;
 	int rv = 0;
-	char *buf, *p;
 
 #if TEST
 	printf("pledge(\"%s\", 0)\n", promises);
@@ -635,22 +638,10 @@ pledge(const char *promises, const char *paths[])
 	if (!promises)
 		return 0;
 
-	flags = 0;
-	buf = strdup(promises);
-	for ((p = strtok(buf, " ")); p; (p = strtok(0, " "))) {
-		f = 0;
-		for (pp = strpromises; pp->name; pp++) {
-			if (strcmp(p, pp->name) == 0)
-				f = pp->flags;
-		}
-		if (!f) {
-			free(buf);
-			errno = EINVAL;
-			return -1;
-		}
-		flags |= f;
+	if (!(flags = pledge_flags(promises))) {
+		errno = EINVAL;
+		return -1;
 	}
-	free(buf);
 
 	if ((currflags & PLEDGED) != PLEDGED) {
 		if (prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) == -1)

@@ -24,8 +24,35 @@ Or both together:
 
 	$ newns -f "base container" pledge -p "proc rpath" sh
 
+
 Install
 -------
 
 	$ make
 	# make install
+
+
+libpledge
+---------
+
+Create a seccomp BPF filter that whitelists systemcalls.
+
+`struct sock_fprog *pledge_whitelist(uint64_t flags);`
+
+Create a seccomp BPF filter that blacklists previously whitelisted systemcalls.
+
+`struct sock_fprog *pledge_blacklist(uint64_t flags, uint64_t oldflags);`
+
+Create a seccomp BPF filter that filters previously whitelisted syscalls based
+on its arguments.
+
+`struct sock_fprog *pledge_filter(uint64_t flags, uint64_t oldflags);`
+
+Convert a list of space separated `promises` to flags.
+
+`uint64_t pledge_flags(const char *);`
+
+Restrict systemcalls based on the supplied `promises` string. This function is
+the main function and should be the only necessary function in most cases.
+
+`int pledge(const char *, const char *[]);`
