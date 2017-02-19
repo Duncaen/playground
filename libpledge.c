@@ -26,10 +26,14 @@
 #define nitems(_a) (sizeof((_a)) / sizeof((_a)[0]))
 #endif
 
-#define _OFFSET_NR 0
-#define _OFFSET_ARCH _OFFSET_NR + sizeof(int)
-#define _OFFSET_IP _OFFSET_ARCH + sizeof(__u32)
-#define _OFFSET_ARG(idx) _OFFSET_IP + (sizeof(__u32) * (idx))
+#define _OFFSET_NR \
+	offsetof(struct seccomp_data, nr)
+
+#define _OFFSET_ARCH \
+	offsetof(struct seccomp_data, arch)
+
+#define _OFFSET_ARG(idx) \
+	offsetof(struct seccomp_data, args[(idx)])
 
 #if __BYTE_ORDER == __LITTLE_ENDIAN
 #define _LO_ARG(idx) \
@@ -63,9 +67,9 @@ union arg64 {
 */
 
 union arg64 {
-	struct {
-		__u32 ENDIAN(lo32, hi32);
-	};
+	struct byteorder {
+		__u32 ENDIAN(lo, hi);
+	} u32;
 	__u64 u64;
 };
 
@@ -102,12 +106,12 @@ union arg64 {
 
 #define _JUMP_EQ64(val, jt, jf) do {                                       \
 		*fp = (struct sock_filter)BPF_JUMP(BPF_JMP+BPF_JEQ+BPF_K,              \
-		               ((union arg64){.u64 = (val)}).hi32, 0, (jf));           \
+		    ((union arg64){.u64 = (val)}).u32.hi, 0, (jf));                    \
 		fp++;                                                                  \
 		*fp = (struct sock_filter)BPF_STMT(BPF_LD+BPF_MEM, 0);                 \
 		fp++;                                                                  \
 		*fp = (struct sock_filter)BPF_JUMP(BPF_JMP+BPF_JEQ+BPF_K,              \
-				((union arg64){.u64 = (val)}).lo32, (jt), (jf));                   \
+		    ((union arg64){.u64 = (val)}).u32.lo, (jt), (jf));                 \
 		fp++;                                                                  \
 	} while (0)
 
@@ -314,7 +318,7 @@ pledge_filter(uint64_t flags, uint64_t oldflags)
 		return 0;
 
 	/* space for 3 different return statements (KILL,ALLOW,EPERM) */
-	len += 3;
+	len += 4;
 
 	printf("allowsocket %d unix=%d inet=%d\n", allow_socket,
 	    ((flags&PLEDGE_UNIX) == PLEDGE_UNIX),
@@ -338,31 +342,34 @@ pledge_filter(uint64_t flags, uint64_t oldflags)
 #define _EPERM	_END-1
 #define _ALLOW	_END-2
 
+	_LOAD_SYSCALL_NR;
+
 	if (allow_selfkill) {
 		pid_t pid = getpid();
 		/* allow kill(0 | getpid(), ...) */
-		_JUMP_EQ(SYS_kill, _KILL, 10); // XXX: fix offset
+		_JUMP_EQ(SYS_kill, 0, 10); // XXX: fix offset
 		_ARG64(0); // +4
-		_JUMP_EQ64(0, _KILL, _KILL); // +3
-		_JUMP_EQ64(pid, _KILL, _KILL); // +3
+		_JUMP_EQ64(0, _ALLOW, 0); // +3
+		_JUMP_EQ64(pid, _ALLOW, _EPERM); // +3
 	}
-
 
 	if (allow_selfchown) {
 		uid_t uid = getuid();
 		gid_t gid = getgid();
 
 		/* chown(2), fchown(2), lchown(2) */
-		_JUMP_EQ(SYS_chown, 3, 0);
-		_JUMP_EQ(SYS_fchown, 2, 0);
-		_JUMP_EQ(SYS_lchown, 0, 14); // XXX: fix offset
+		_JUMP_EQ(SYS_chown, 4, 0);
+		_JUMP_EQ(SYS_fchown, 3, 0);
+		_JUMP_EQ(SYS_lchown, 2, 0); // XXX: fix offset
+		_JUMP_EQ(SYS_fchownat, 14, 28); // XXX: fix offset
+
+		/* [fl]chown(.., uid, gid) */
 		_ARG64(1); // +4
 		_JUMP_EQ64(uid, 0, _EPERM); // +3
 		_ARG64(2); // + 4
 		_JUMP_EQ64(gid, _ALLOW, _EPERM); // +3
 
-	/* fchownat(2) */
-		_JUMP_EQ(SYS_fchownat, 0, 14); // XXX: fix offset
+	/* fchownat(.., .., uid, gid, ..) */
 		_ARG64(2); // +4
 		_JUMP_EQ64(uid, 0, _EPERM); // +3
 		_ARG64(4); // + 4
@@ -393,14 +400,14 @@ pledge_filter(uint64_t flags, uint64_t oldflags)
 
 	if (allow_fcntl) {
 		/* allow fcntl(..., != F_SETOWN, ...) */
-		_JUMP_EQ(SYS_fcntl, 0, 1);
+		_JUMP_EQ(SYS_fcntl, 0, 2);
 		_ARG32(1);
 		_JUMP_EQ(F_SETOWN, _EPERM, _ALLOW);
 	}
 
 	if (allow_ioctl) {
 		/* allow ioctl(..., FIONREAD|FIONBIO|FIOCLEX|FIONCLEX, ...) */
-		_JUMP_EQ(SYS_kill, 0, 5);
+		_JUMP_EQ(SYS_ioctl, 0, 5);
 		_ARG32(1);
 		_JUMP_EQ(FIONREAD, _ALLOW, 0);
 		_JUMP_EQ(FIONBIO, _ALLOW, 0);
