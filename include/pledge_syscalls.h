@@ -80,6 +80,8 @@ const uint64_t pledge_syscalls[] = {
 	[SYS_pause] = PLEDGE_STDIO,
 	[SYS_time] = PLEDGE_STDIO,
 	[SYS_set_tid_address] = PLEDGE_STDIO,
+	[SYS_gettid] = PLEDGE_STDIO,
+	[SYS_tgkill] = PLEDGE_STDIO,
 
 	/* events,poll */
 #ifdef SYS__newselect
