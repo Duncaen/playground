@@ -21,112 +21,11 @@
 
 #include "pledge.h"
 #include "pledge_syscalls.h"
+#include "seccomp_bpf_utils.h"
 
 #ifndef nitems
 #define nitems(_a) (sizeof((_a)) / sizeof((_a)[0]))
 #endif
-
-#define _OFFSET_NR \
-	offsetof(struct seccomp_data, nr)
-
-#define _OFFSET_ARCH \
-	offsetof(struct seccomp_data, arch)
-
-#define _OFFSET_ARG(idx) \
-	offsetof(struct seccomp_data, args[(idx)])
-
-#if __BYTE_ORDER == __LITTLE_ENDIAN
-#define _LO_ARG(idx) \
-	_OFFSET_ARG((idx))
-#elif __BYTE_ORDER == __BIG_ENDIAN
-#define _LO_ARG(idx) \
-	_OFFSET_ARG((idx)) + sizeof(__u32)
-#else
-#error "Unknown endianness"
-#endif
-
-#if __BYTE_ORDER == __LITTLE_ENDIAN
-# define ENDIAN(_lo, _hi) _lo, _hi
-# define _HI_ARG(idx) \
-	_OFFSET_ARG((idx)) + sizeof(__u32)
-#elif __BYTE_ORDER == __BIG_ENDIAN
-# define ENDIAN(_lo, _hi) _hi, _lo
-# define _HI_ARG(idx) \
-	_OFFSET_ARG((idx))
-#else
-# error "Unknown endianness"
-#endif
-
-/*
-union arg64 {
-	struct edi {
-		__u32 ENDIAN(lo, hi);
-	} u32;
-	__u64 u64;
-};
-*/
-
-union arg64 {
-	struct byteorder {
-		__u32 ENDIAN(lo, hi);
-	} u32;
-	__u64 u64;
-};
-
-#define _LOAD_SYSCALL_NR do {                                               \
-		*fp = (struct sock_filter)BPF_STMT(BPF_LD+BPF_W+BPF_ABS, _OFFSET_NR);   \
-		fp++;                                                                   \
-} while (0)
-
-#define _LOAD_ARCH do {                                                     \
-		*fp = (struct sock_filter)BPF_STMT(BPF_LD+BPF_W+BPF_ABS, _OFFSET_ARCH); \
-		fp++;                                                                   \
-	} while (0)
-
-#define _ARG32(idx) do {                                                    \
-		*fp = (struct sock_filter)BPF_STMT(BPF_LD+BPF_W+BPF_ABS, _LO_ARG(idx)); \
-		fp++;                                                                   \
-	} while (0)
-
-#define _ARG64(idx) do {                                                    \
-		*fp = (struct sock_filter)BPF_STMT(BPF_LD+BPF_W+BPF_ABS, _LO_ARG(idx)); \
-		fp++;                                                                   \
-		*fp = (struct sock_filter)BPF_STMT(BPF_ST, 0);                          \
-		fp++;                                                                   \
-		*fp = (struct sock_filter)BPF_STMT(BPF_LD+BPF_W+BPF_ABS, _HI_ARG(idx)); \
-		fp++;                                                                   \
-		*fp = (struct sock_filter)BPF_STMT(BPF_ST, 1);                          \
-		fp++;                                                                   \
-	} while (0)
-
-#define _JUMP_EQ(v, t, f) do {                                                \
-		*fp = (struct sock_filter)BPF_JUMP(BPF_JMP+BPF_JEQ+BPF_K, (v), (t), (f)); \
-		fp++;                                                                     \
-	} while (0)
-
-#define _JUMP_EQ64(val, jt, jf) do {                                       \
-		*fp = (struct sock_filter)BPF_JUMP(BPF_JMP+BPF_JEQ+BPF_K,              \
-		    ((union arg64){.u64 = (val)}).u32.hi, 0, (jf));                    \
-		fp++;                                                                  \
-		*fp = (struct sock_filter)BPF_STMT(BPF_LD+BPF_MEM, 0);                 \
-		fp++;                                                                  \
-		*fp = (struct sock_filter)BPF_JUMP(BPF_JMP+BPF_JEQ+BPF_K,              \
-		    ((union arg64){.u64 = (val)}).u32.lo, (jt), (jf));                 \
-		fp++;                                                                  \
-	} while (0)
-
-#define _JUMP(j) do {                                                       \
-		*fp = (struct sock_filter)BPF_JUMP(BPF_JMP+BPF_JA, (j), 0xFF, 0xFF),    \
-		fp++;                                                                   \
-	} while (0)
-
-#define _RET(v) do {                                                        \
-		*fp = (struct sock_filter)BPF_STMT(BPF_RET+BPF_K, (v));                 \
-		fp++;                                                                   \
-	} while (0)
-
-#define _END \
-	len-1-(fp-fprog->filter)-1
 
 struct promise {
 	const char *name;
@@ -425,20 +324,14 @@ pledge_filter(uint64_t flags, uint64_t oldflags)
 			_JUMP_EQ64(FIOCLEX, _ALLOW, 0);
 			_JUMP_EQ64(FIONCLEX, _ALLOW, 0);
 		}
-		if (allow_ioctl_ioctl == FILTER_WHITELIST) {
-			_JUMP_EQ64(TCFLSH, _ALLOW, 0);
-			_JUMP_EQ64(TCGETS, _ALLOW, 0);
-			_JUMP_EQ64(TIOCGWINSZ, _ALLOW, 0);
-			_JUMP_EQ64(TIOCGPGRP, _ALLOW, 0);
-			_JUMP_EQ64(TCSETSF, _ALLOW, 0);
-			_JUMP_EQ64(TCSETSW, _ALLOW, 0);
-		} else if (allow_ioctl_ioctl == FILTER_BLACKLIST) {
-			_JUMP_EQ64(TCFLSH, _EPERM, 0);
-			_JUMP_EQ64(TCGETS, _EPERM, 0);
-			_JUMP_EQ64(TIOCGWINSZ, _EPERM, 0);
-			_JUMP_EQ64(TIOCGPGRP, _EPERM, 0);
-			_JUMP_EQ64(TCSETSF, _EPERM, 0);
-			_JUMP_EQ64(TCSETSW, _EPERM, 0);
+		if (allow_ioctl_ioctl) {
+#define _JTRUE	(allow_ioctl_ioctl == FILTER_WHITELIST ? _ALLOW : _EPERM)
+			_JUMP_EQ64(TCFLSH, _JTRUE, 0);
+			_JUMP_EQ64(TCGETS, _JTRUE, 0);
+			_JUMP_EQ64(TIOCGWINSZ, _JTRUE, 0);
+			_JUMP_EQ64(TIOCGPGRP, _JTRUE, 0);
+			_JUMP_EQ64(TCSETSF, _JTRUE, 0);
+			_JUMP_EQ64(TCSETSW, _JTRUE, 0);
 		}
 		_JUMP(_EPERM);
 	}
@@ -528,50 +421,3 @@ ret:
 	free(filterprog);
 	return rv;
 }
-
-#ifdef TEST
-int
-main(int argc, char *argv[])
-{
-	if (pledge("stdio chown fattr cpath proc id", 0) == -1) {
-		fprintf(stderr, "error: pledge\n");
-		exit(1);
-	}
-
-	if (argc == 2) {
-		if (pledge("stdio", 0) == -1) {
-			fprintf(stderr, "error: pledge\n");
-			exit(1);
-		}
-		printf("block chown\n");
-		chown("./test", 1000, 1000);
-	} else if (argc == 3) {
-		printf("allow unlink\n");
-		unlink("./test");
-	} else if (argc == 4) {
-		if (pledge("stdio", 0) == -1) {
-			fprintf(stderr, "error: pledge\n");
-			exit(1);
-		}
-		printf("block unlink\n");
-		unlink("./test");
-	} else if (argc == 5) {
-#ifdef getentropy
-		printf("block getrandom\n");
-		char buf[128];
-		getentropy(buf, sizeof buf);
-#endif
-	} else if (argc == 6) {
-		if (pledge("stdio foo", 0) == -1) {
-			fprintf(stderr, "error: pledge\n");
-			exit(1);
-		}
-	} else if (argc == 7) {
-		fprintf(stderr, "test chown(.., 1001, 1001)\n");
-		chown("./test", 1001, 1001);
-	} else {
-		printf("allow\n");
-	}
-	return 0;
-}
-#endif

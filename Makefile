@@ -11,7 +11,7 @@ $(PROGS) : % : %.o
 $(LIBS:=.a) : %.a : %.o
 $(LIBS:=.so) : %.so : %.o
 
-libpledge.o : include/pledge_syscalls.h
+libpledge.o : include/pledge_syscalls.h include/seccomp_bpf_utils.h
 libpledge.o pledge.o : include/pledge.h
 
 pledge: libpledge.a
