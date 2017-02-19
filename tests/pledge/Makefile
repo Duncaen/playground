@@ -7,6 +7,8 @@ TEST=${SRCS:.c=}
 
 all: options tests clean
 
+test_filter_conditions.o: ../../include/pledge.h
+
 $(TEST) : % : %.o
 
 $(TEST):

@@ -26,27 +26,50 @@
 #define PLEDGE_KEY      0x0000000002000000ULL
 #define PLEDGE_KERN     0x0000000004000000ULL
 
+#define FILTER_WHITELIST 1
+#define FILTER_BLACKLIST 2
+
 #define _FLAG_DROPPED(x) \
 	((oldflags&(x)) && (~flags&(x)))
 
 #define _FILTER_CHOWN \
-	(!oldflags && !(flags&PLEDGE_CHOWNUID)) || _FLAG_DROPPED(PLEDGE_CHOWNUID)
+	(!oldflags && !(flags&PLEDGE_CHOWNUID)) \
+	? FILTER_WHITELIST \
+	: 0
 
 #define _FILTER_PRCTL \
-	_FLAG_DROPPED(PLEDGE_PROC)
+	(oldflags && !(flags&PLEDGE_PROC)) || (!oldflags && !(flags&PLEDGE_PROC)) \
+	? FILTER_WHITELIST \
+	: 0
 
 #define _FILTER_SOCKET \
-	(!oldflags && !(flags&PLEDGE_INET)^!(flags&PLEDGE_UNIX)) || \
-	_FLAG_DROPPED(PLEDGE_INET) ^ _FLAG_DROPPED(PLEDGE_UNIX)
+	(!oldflags && !(flags&PLEDGE_INET)^!(flags&PLEDGE_UNIX)) \
+	? FILTER_WHITELIST \
+	: _FLAG_DROPPED(PLEDGE_INET) ^ _FLAG_DROPPED(PLEDGE_UNIX) \
+	? FILTER_WHITELIST \
+	: 0
 
 #define _FILTER_KILL \
-	(!oldflags && !(flags&PLEDGE_PROC)) || _FLAG_DROPPED(PLEDGE_PROC)
+	(!oldflags && !(flags&PLEDGE_PROC)) || _FLAG_DROPPED(PLEDGE_PROC) \
+	? FILTER_WHITELIST \
+	: 0
 
 #define _FILTER_FCNTL \
-	!(oldflags && flags&PLEDGE_PROC) || _FLAG_DROPPED(PLEDGE_PROC)
+	!(oldflags && flags&PLEDGE_PROC) || _FLAG_DROPPED(PLEDGE_PROC) \
+	? FILTER_WHITELIST \
+	: 0
 
 #define _FILTER_IOCTL_ALWAYS \
-	!oldflags
+	!oldflags || _FLAG_DROPPED(PLEDGE_IOCTL) \
+	? FILTER_WHITELIST \
+	: 0
+
+#define _FILTER_IOCTL_IOCTL \
+	(!oldflags && (flags&PLEDGE_IOCTL)) \
+	? FILTER_WHITELIST \
+	: _FLAG_DROPPED(PLEDGE_IOCTL) \
+	? FILTER_BLACKLIST \
+	: 0
 
 struct sock_fprog *pledge_whitelist(uint64_t);
 struct sock_fprog *pledge_blacklist(uint64_t, uint64_t);
