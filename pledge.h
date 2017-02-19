@@ -26,6 +26,28 @@
 #define PLEDGE_KEY      0x0000000002000000ULL
 #define PLEDGE_KERN     0x0000000004000000ULL
 
+#define _FLAG_DROPPED(x) \
+	((oldflags&(x)) && (~flags&(x)))
+
+#define _FILTER_CHOWN \
+	(!oldflags && !(flags&PLEDGE_CHOWNUID)) || _FLAG_DROPPED(PLEDGE_CHOWNUID)
+
+#define _FILTER_PRCTL \
+	_FLAG_DROPPED(PLEDGE_PROC)
+
+#define _FILTER_SOCKET \
+	(!oldflags && !(flags&PLEDGE_INET)^!(flags&PLEDGE_UNIX)) || \
+	_FLAG_DROPPED(PLEDGE_INET) ^ _FLAG_DROPPED(PLEDGE_UNIX)
+
+#define _FILTER_KILL \
+	(!oldflags && !(flags&PLEDGE_PROC)) || _FLAG_DROPPED(PLEDGE_PROC)
+
+#define _FILTER_FCNTL \
+	!(oldflags && flags&PLEDGE_PROC) || _FLAG_DROPPED(PLEDGE_PROC)
+
+#define _FILTER_IOCTL_ALWAYS \
+	!oldflags
+
 struct sock_fprog *pledge_whitelist(uint64_t);
 struct sock_fprog *pledge_blacklist(uint64_t, uint64_t);
 struct sock_fprog *pledge_filter(uint64_t, uint64_t);

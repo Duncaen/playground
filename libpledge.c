@@ -280,12 +280,13 @@ pledge_filter(uint64_t flags, uint64_t oldflags)
 	int allow_prctl, allow_socket, allow_selfkill, allow_fcntl, allow_selfchown, allow_ioctl;
 
 	len = 0;
-	allow_selfchown = (!(flags & PLEDGE_CHOWNUID) && (flags & PLEDGE_CHOWN)) || 0;
-	allow_prctl = !(flags & PLEDGE_PROC) || 0;
-	allow_socket = (flags & PLEDGE_INET) || (flags & PLEDGE_UNIX) || 0;
-	allow_selfkill = (!(flags & PLEDGE_PROC)) || 0;
-	allow_fcntl = (!(flags & PLEDGE_PROC) && (flags & PLEDGE_STDIO)) || 0;
-	allow_ioctl = (!(flags & PLEDGE_IOCTL)) || 0;
+
+	allow_selfchown = _FILTER_CHOWN;
+	allow_prctl = _FILTER_PRCTL;
+	allow_socket = _FILTER_SOCKET;
+	allow_selfkill = _FILTER_KILL;
+	allow_fcntl = _FILTER_FCNTL;
+	allow_ioctl = _FILTER_IOCTL_ALWAYS;
 
 	/* chown(2), fchown(2), lchown(2), fchownat(2) */
 	if (allow_selfchown)
