@@ -1,4 +1,4 @@
-.Dd July 22, 2017
+.Dd February 19, 2017
 .Dt PLEDGE 1
 .Os
 .Sh NAME
@@ -6,9 +6,10 @@
 .Nd execute commands with restricted syscalls
 .Sh SYNOPSIS
 .Nm
+.Op Fl dv
 .Op Fl p Ar promises
 .Ar command
-.Op Ar args\ ...
+.Op Ar args
 .Sh DESCRIPTION
 The
 .Nm
@@ -24,15 +25,29 @@ by a
 .Dv SIGSYS
 signal.
 .Pp
+The
+.Ar exec
+and
+.Ar stdio
+.Ar promises
+are enabled by default.
+.Pp
 The options are as follows:
 .Bl -tag -width Ds
+.It Fl d
+Debug mode, uses
+.Dv SECCOMP_RET_TRAP
+instead of
+.Dv SECCOMP_RET_KILL
+on promise violations, see
+.Xr seccomp 2 .
 .It Fl p Ar promises
 A space separated list of promises.
 See
 .Sx PROMISES
 for a complete list of available promises.
-Default:
-.Sq Li "exec stdio" .
+.It Fl v
+Verbose mode.
 .El
 .Sh PROMISES
 See

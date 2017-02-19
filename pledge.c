@@ -11,6 +11,7 @@
 #include "pledge.h"
 
 static char *argv0;
+static char promises[256] = "exec stdio";
 
 static void
 usage()
@@ -19,37 +20,33 @@ usage()
 	exit(1);
 }
 
+static void
+addpromises(char *s)
+{
+	size_t len, pos;
+	pos = strlen(promises);
+	if (pos)
+		promises[pos++] = ' ';
+	len = strlen(s);
+	if (pos+len >= sizeof promises - 1)
+		errx(1, "promises: too long");
+	memcpy(promises+pos, s, len);
+}
+
 int
 main(int argc, char *argv[])
 {
-	char promises[128];
-	char *p, *n;
-	ssize_t len;
 	int c;
-
-	len = sizeof promises - 1;
 	argv0 = *argv;
-
-	memset(promises, 0, sizeof promises);
-	strcpy(promises, "exec stdio");
-	p = promises+strlen(promises);
-
-	while((c = getopt(argc, argv, "+p:")) != -1)
+	while((c = getopt(argc, argv, "+dp:v")) != -1)
 		switch (c) {
-		case 'p':
-			n = p+strlen(optarg)+1;
-			if (n-promises >= len)
-				errx(1, "promises: too long");
-			*p++ = ' ';
-			memcpy(p, optarg, n-p);
-			p = n;
-			break;
+		case 'd': addpromises("debug"); break;
+		case 'p': addpromises(optarg); break;
+		case 'v': addpromises("verbose"); break;
 		default: usage();
 		}
-
 	argc -= optind;
 	argv += optind;
-
 	if (!argc)
 		usage();
 
