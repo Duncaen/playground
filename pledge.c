@@ -22,7 +22,7 @@ usage()
 }
 
 static void
-addpromises(char *s)
+addpromises(const char *s)
 {
 	size_t len, pos;
 	pos = strlen(promises);

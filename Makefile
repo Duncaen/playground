@@ -1,5 +1,6 @@
 .error : This Makefile needs GNU make
-CFLAGS+=-std=c99 -g -O2 -Wall -pedantic -Wall -Wextra -fstack-protector-strong
+CFLAGS+=-std=c99 -g -O2 -fstack-protector-strong
+CFLAGS+=-Wall -Wextra -Wwrite-strings -Wno-switch -Wno-extended-offsetof -pedantic
 CPPFLAGS+=-D_DEFAULT_SOURCE -D_FORTIFY_SOURCE=2
 
 DESTDIR=

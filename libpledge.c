@@ -129,7 +129,7 @@ union arg64 {
 	len-1-(fp-fprog->filter)-1
 
 struct promise {
-	char *name;
+	const char *name;
 	uint64_t flags;
 };
 
