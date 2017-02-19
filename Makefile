@@ -8,8 +8,8 @@ LIBDIR=$(PREFIX)/lib
 INCDIR=$(PREFIX)/include
 MANDIR=$(PREFIX)/share/man
 
-PROGS = pledge newns
-LIBS = libpledge libnewns
+PROGS = pledge # newns
+LIBS = libpledge # libnewns
 ALL = $(LIBS:=.a) $(LIBS:=.so) $(PROGS)
 
 all: $(ALL)
@@ -19,7 +19,7 @@ $(LIBS:=.a) : %.a : %.o
 $(LIBS:=.so) : %.so : %.o
 
 pledge: libpledge.a
-newns: libnewns.a
+# newns: libnewns.a
 
 pledge:
 	$(CC) $^ -o $@ $(LDFLAGS)
@@ -42,5 +42,8 @@ install: FRC all
 	install -m0644 libpledge.a libpledge.so $(DESTDIR)$(LIBDIR)
 	install -m0644 pledge.h $(DESTDIR)$(INCDIR)
 	install -m0755 pledge $(DESTDIR)$(BINDIR)
+	# install -m0755 newns $(DESTDIR)$(BINDIR)
+	# install -m0644 libnewns.a libnewns.so $(DESTDIR)$(LIBDIR)
+	# install -m0644 newns.h $(DESTDIR)$(INCDIR)
 
 FRC:
