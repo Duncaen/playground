@@ -40,7 +40,7 @@ that might be useful but aren't in most cases, its suggested to only use this
 function.
 
 `pledge(2)` makes use of seccomp layering, the first `pledge(2)` call creates
-a whitelist white allowed systemcalls and if necessary a second layer with
+a whitelist with allowed systemcalls and if necessary a second layer with
 filters that look at arguments of systemcalls. Subsequent `pledge(2)` calls
 blacklist systemcalls that are not part of the new promises and adds the
 filter layer if necessary. The BPF filters are as small as possible and
