@@ -1,5 +1,5 @@
 .error : This Makefile needs GNU make
-CFLAGS+=-std=c99 -g -O2 -fstack-protector-strong
+CFLAGS+=-std=c99 -g -O2 -fstack-protector-strong -Iinclude
 CFLAGS+=-Wall -Wextra -Wwrite-strings -Wno-switch -Wno-extended-offsetof -pedantic
 CPPFLAGS+=-D_DEFAULT_SOURCE -D_FORTIFY_SOURCE=2
 
@@ -20,8 +20,8 @@ $(PROGS) : % : %.o
 $(LIBS:=.a) : %.a : %.o
 $(LIBS:=.so) : %.so : %.o
 
-libpledge.o : pledge_syscalls.h
-libpledge.o pledge.o : pledge.h
+libpledge.o : include/pledge_syscalls.h
+libpledge.o pledge.o : include/pledge.h
 
 pledge: libpledge.a
 # newns: libnewns.a
@@ -45,7 +45,7 @@ install: all
 		$(DESTDIR)$(LIBDIR) \
 		$(DESTDIR)$(INCDIR)
 	install -m0644 libpledge.a libpledge.so $(DESTDIR)$(LIBDIR)
-	install -m0644 pledge.h $(DESTDIR)$(INCDIR)
+	install -m0644 include/pledge.h $(DESTDIR)$(INCDIR)
 	install -m0755 pledge $(DESTDIR)$(BINDIR)
 	# install -m0755 newns $(DESTDIR)$(BINDIR)
 	# install -m0644 libnewns.a libnewns.so $(DESTDIR)$(LIBDIR)
