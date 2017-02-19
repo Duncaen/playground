@@ -18,6 +18,9 @@ const uint64_t pledge_syscalls[] = {
 	[SYS_getppid] = PLEDGE_STDIO,
 	[SYS_getsid] = PLEDGE_STDIO,
 	[SYS_getrlimit] = PLEDGE_STDIO,
+#ifdef SYS_getrandom
+	[SYS_getrandom] = PLEDGE_STDIO,
+#endif
 	[SYS_gettimeofday] = PLEDGE_STDIO,
 	[SYS_getrusage] = PLEDGE_STDIO,
 	[SYS_clock_getres] = PLEDGE_STDIO,
