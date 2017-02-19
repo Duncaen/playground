@@ -1,0 +1,31 @@
+playground
+==========
+
+Sandbox, container or (whatever you want to call it) utilities for linux.
+
+There is still a lot to do, `pledge` should already work, but it might be
+renamed later to be not confused with a similar api for a different OS.
+At the moment `newns` is just an idea with some very basic code that does
+not even compile and some docs on how or what it should do.
+
+Usage
+-----
+
+To just restrict the allowed syscalls:
+
+	$ pledge -p "proc rpath" sh
+
+To create a new "container" (unshare all possible namespaces) and share the
+base filesystem (/{bin,sbin,lib,var,usr,etc}) with it:
+
+	$ newns -f "base container" sh
+
+Or both together:
+
+	$ newns -f "base container" pledge -p "proc rpath" sh
+
+Install
+-------
+
+	$ make
+	# make install

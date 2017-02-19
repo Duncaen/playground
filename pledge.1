@@ -1,0 +1,80 @@
+.Dd July 22, 2017
+.Dt PLEDGE 1
+.Os
+.Sh NAME
+.Nm pledge
+.Nd execute commands with restricted syscalls
+.Sh SYNOPSIS
+.Nm
+.Op Fl p Ar promises
+.Ar command
+.Op Ar args\ ...
+.Sh DESCRIPTION
+The
+.Nm
+utility executes the given
+.Ar command
+with restricted access to syscalls using
+.Xr seccomp 2 .
+The
+.Ar promises
+argument specifies the groups of syscalls the command is allowed to used.
+If the command uses a syscall from a group that is not promised it is killed
+by a
+.Dv SIGSYS
+signal.
+.Pp
+The options are as follows:
+.Bl -tag -width Ds
+.It Fl p Ar promises
+A space separated list of promises.
+See
+.Sx PROMISES
+for a complete list of available promises.
+Default:
+.Sq Li "exec stdio" .
+.El
+.Sh PROMISES
+See
+.Xr pledge 2
+for a more complete description of each promise.
+.Bl -tag -width Ds
+.It Ar stdio
+Allows most basic syscalls.
+.It Ar rpath
+Read-only operations on the filesystem.
+.It Ar wpath
+Write operations on the filesystem.
+.It Ar cpath
+Allows the creation of new files and directories.
+.It Ar inet
+.Dv AF_INET
+and
+.Dv AF_INET6
+sockets.
+.It Ar fattr
+Change file attributes.
+.It Ar chmod
+Change file modes.
+.It Ar flock
+File locking.
+.It Ar unix
+.Dv AF_UNIX
+sockets.
+.It Ar proc
+Process relationship operations.
+.It Ar exec
+Start new processes.
+.It Ar id
+Syscalls that can change the rights of a process.
+.El
+.Sh EXIT STATUS
+.Ex -std
+.Sh SEE ALSO
+.Xr pledge 2 ,
+.Xr seccomp 2 ,
+.Xr syscalls 2
+.Sh AUTHORS
+.An Duncan Overbruck Aq Mt mail@duncano.de
+.Sh LICENSE
+TBA
