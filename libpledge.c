@@ -313,11 +313,11 @@ pledge_filter(uint64_t flags, uint64_t oldflags)
 		len += 3;
 
 	if (allow_ioctl_always || allow_ioctl_ioctl) {
-		len += 3;
+		len += 5;
 		if (allow_ioctl_always)
-			len += 4;
+			len += 12;
 		if (allow_ioctl_ioctl)
-			len += 6;
+			len += 18;
 	}
 
 	/* no new filters */
@@ -415,30 +415,30 @@ pledge_filter(uint64_t flags, uint64_t oldflags)
 
 	if (allow_ioctl_always || allow_ioctl_ioctl) {
 		/* allow ioctl(..., FIONREAD|FIONBIO|FIOCLEX|FIONCLEX, ...) */
-		_JUMP_EQ(SYS_ioctl, 0, 2 +
-		    (allow_ioctl_always ? 4 : 0) +
-		    (allow_ioctl_ioctl ? 6 : 0));
-		_ARG32(1);
+		_JUMP_EQ(SYS_ioctl, 0, 5 +
+		    (allow_ioctl_always ? 12 : 0) +
+		    (allow_ioctl_ioctl ? 18 : 0));
+		_ARG64(1); // 4
 		if (allow_ioctl_always) {
-			_JUMP_EQ(FIONREAD, _ALLOW, 0);
-			_JUMP_EQ(FIONBIO, _ALLOW, 0);
-			_JUMP_EQ(FIOCLEX, _ALLOW, 0);
-			_JUMP_EQ(FIONCLEX, _ALLOW, 0);
+			_JUMP_EQ64(FIONREAD, _ALLOW, 0);
+			_JUMP_EQ64(FIONBIO, _ALLOW, 0);
+			_JUMP_EQ64(FIOCLEX, _ALLOW, 0);
+			_JUMP_EQ64(FIONCLEX, _ALLOW, 0);
 		}
 		if (allow_ioctl_ioctl == FILTER_WHITELIST) {
-			_JUMP_EQ(TCFLSH, _ALLOW, 0);
-			_JUMP_EQ(TCGETS, _ALLOW, 0);
-			_JUMP_EQ(TIOCGWINSZ, _ALLOW, 0);
-			_JUMP_EQ(TIOCGPGRP, _ALLOW, 0);
-			_JUMP_EQ(TCSETSF, _ALLOW, 0);
-			_JUMP_EQ(TCSETSW, _ALLOW, 0);
+			_JUMP_EQ64(TCFLSH, _ALLOW, 0);
+			_JUMP_EQ64(TCGETS, _ALLOW, 0);
+			_JUMP_EQ64(TIOCGWINSZ, _ALLOW, 0);
+			_JUMP_EQ64(TIOCGPGRP, _ALLOW, 0);
+			_JUMP_EQ64(TCSETSF, _ALLOW, 0);
+			_JUMP_EQ64(TCSETSW, _ALLOW, 0);
 		} else if (allow_ioctl_ioctl == FILTER_BLACKLIST) {
-			_JUMP_EQ(TCFLSH, _EPERM, 0);
-			_JUMP_EQ(TCGETS, _EPERM, 0);
-			_JUMP_EQ(TIOCGWINSZ, _EPERM, 0);
-			_JUMP_EQ(TIOCGPGRP, _EPERM, 0);
-			_JUMP_EQ(TCSETSF, _EPERM, 0);
-			_JUMP_EQ(TCSETSW, _EPERM, 0);
+			_JUMP_EQ64(TCFLSH, _EPERM, 0);
+			_JUMP_EQ64(TCGETS, _EPERM, 0);
+			_JUMP_EQ64(TIOCGWINSZ, _EPERM, 0);
+			_JUMP_EQ64(TIOCGPGRP, _EPERM, 0);
+			_JUMP_EQ64(TCSETSF, _EPERM, 0);
+			_JUMP_EQ64(TCSETSW, _EPERM, 0);
 		}
 		_JUMP(_EPERM);
 	}
