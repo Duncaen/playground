@@ -277,7 +277,7 @@ pledge_filter(uint64_t flags, uint64_t oldflags)
 	struct sock_fprog *fprog;
 	struct sock_filter *fp;
 	uint64_t len;
-	int allow_prctl, allow_socket, allow_selfkill, allow_fcntl, allow_selfchown, allow_ioctl;
+	int allow_prctl, allow_socket, allow_selfkill, allow_fcntl, allow_selfchown, allow_ioctl_always, allow_ioctl_ioctl;
 
 	len = 0;
 
@@ -286,7 +286,8 @@ pledge_filter(uint64_t flags, uint64_t oldflags)
 	allow_socket = _FILTER_SOCKET;
 	allow_selfkill = _FILTER_KILL;
 	allow_fcntl = _FILTER_FCNTL;
-	allow_ioctl = _FILTER_IOCTL_ALWAYS;
+	allow_ioctl_always = _FILTER_IOCTL_ALWAYS;
+	allow_ioctl_ioctl= _FILTER_IOCTL_IOCTL;
 
 	/* chown(2), fchown(2), lchown(2), fchownat(2) */
 	if (allow_selfchown)
@@ -311,8 +312,13 @@ pledge_filter(uint64_t flags, uint64_t oldflags)
 	if (allow_fcntl)
 		len += 3;
 
-	if (allow_ioctl)
-		len += 6;
+	if (allow_ioctl_always || allow_ioctl_ioctl) {
+		len += 3;
+		if (allow_ioctl_always)
+			len += 4;
+		if (allow_ioctl_ioctl)
+			len += 6;
+	}
 
 	/* no new filters */
 	if (!len)
@@ -328,7 +334,8 @@ pledge_filter(uint64_t flags, uint64_t oldflags)
 	printf("allowprctl %d\n", allow_prctl);
 	printf("allowselfkill %d\n", allow_selfkill);
 	printf("allowfcntl %d\n", allow_fcntl);
-	printf("allowbasicioctl %d\n", allow_ioctl);
+	printf("allow ioctl always %d\n", allow_ioctl_always);
+	printf("allow ioctl ioctl %d\n", allow_ioctl_ioctl);
 
 	if (!(fprog = calloc(1, sizeof(struct sock_fprog))))
 		return 0;
@@ -406,14 +413,34 @@ pledge_filter(uint64_t flags, uint64_t oldflags)
 		_JUMP_EQ(F_SETOWN, _EPERM, _ALLOW);
 	}
 
-	if (allow_ioctl) {
+	if (allow_ioctl_always || allow_ioctl_ioctl) {
 		/* allow ioctl(..., FIONREAD|FIONBIO|FIOCLEX|FIONCLEX, ...) */
-		_JUMP_EQ(SYS_ioctl, 0, 5);
+		_JUMP_EQ(SYS_ioctl, 0, 2 +
+		    (allow_ioctl_always ? 4 : 0) +
+		    (allow_ioctl_ioctl ? 6 : 0));
 		_ARG32(1);
-		_JUMP_EQ(FIONREAD, _ALLOW, 0);
-		_JUMP_EQ(FIONBIO, _ALLOW, 0);
-		_JUMP_EQ(FIOCLEX, _ALLOW, 0);
-		_JUMP_EQ(FIONCLEX, _ALLOW, _KILL);
+		if (allow_ioctl_always) {
+			_JUMP_EQ(FIONREAD, _ALLOW, 0);
+			_JUMP_EQ(FIONBIO, _ALLOW, 0);
+			_JUMP_EQ(FIOCLEX, _ALLOW, 0);
+			_JUMP_EQ(FIONCLEX, _ALLOW, 0);
+		}
+		if (allow_ioctl_ioctl == FILTER_WHITELIST) {
+			_JUMP_EQ(TCFLSH, _ALLOW, 0);
+			_JUMP_EQ(TCGETS, _ALLOW, 0);
+			_JUMP_EQ(TIOCGWINSZ, _ALLOW, 0);
+			_JUMP_EQ(TIOCGPGRP, _ALLOW, 0);
+			_JUMP_EQ(TCSETSF, _ALLOW, 0);
+			_JUMP_EQ(TCSETSW, _ALLOW, 0);
+		} else if (allow_ioctl_ioctl == FILTER_BLACKLIST) {
+			_JUMP_EQ(TCFLSH, _EPERM, 0);
+			_JUMP_EQ(TCGETS, _EPERM, 0);
+			_JUMP_EQ(TIOCGWINSZ, _EPERM, 0);
+			_JUMP_EQ(TIOCGPGRP, _EPERM, 0);
+			_JUMP_EQ(TCSETSF, _EPERM, 0);
+			_JUMP_EQ(TCSETSW, _EPERM, 0);
+		}
+		_JUMP(_EPERM);
 	}
 
 	/* no match */
