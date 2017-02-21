@@ -32,6 +32,11 @@
 #define _FLAG_DROPPED(x) \
 	((oldflags&(x)) && (~flags&(x)))
 
+#define _FILTER_OPEN \
+	(!oldflags && !(flags&PLEDGE_CPATH)) || _FLAG_DROPPED(PLEDGE_CPATH) \
+	? FILTER_BLACKLIST \
+	: 0
+
 #define _FILTER_CHOWN \
 	(!oldflags && !(flags&PLEDGE_CHOWNUID)) \
 	? FILTER_WHITELIST \

@@ -1,23 +1,25 @@
-#include <string.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <stddef.h>
-#include <stdint.h>
-#include <errno.h>
-#include <unistd.h>
-#include <fcntl.h>
-#include <endian.h>
-
-#include <asm/bitsperlong.h>	/* for __BITS_PER_LONG */
-
 #include <sys/prctl.h>
 #include <sys/ioctl.h>
 #include <sys/syscall.h>
 #include <sys/socket.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+
+#include <asm/bitsperlong.h>	/* for __BITS_PER_LONG */
 
 #include <linux/filter.h>
 #include <linux/seccomp.h>
 #include <linux/audit.h>
+
+#include <endian.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <stddef.h>
+#include <stdint.h>
+#include <string.h>
+#include <unistd.h>
 
 #include "pledge.h"
 #include "pledge_syscalls.h"
@@ -177,6 +179,7 @@ pledge_filter(uint64_t flags, uint64_t oldflags)
 	struct sock_filter *fp;
 	uint64_t len;
 	int allow_prctl, allow_socket, allow_selfkill, allow_fcntl, allow_selfchown, allow_ioctl_always, allow_ioctl_ioctl;
+	int filter_open;
 
 	len = 0;
 
@@ -187,6 +190,10 @@ pledge_filter(uint64_t flags, uint64_t oldflags)
 	allow_fcntl = _FILTER_FCNTL;
 	allow_ioctl_always = _FILTER_IOCTL_ALWAYS;
 	allow_ioctl_ioctl= _FILTER_IOCTL_IOCTL;
+	filter_open = _FILTER_OPEN;
+
+	if (filter_open)
+		len += 9;
 
 	/* chown(2), fchown(2), lchown(2), fchownat(2) */
 	if (allow_selfchown)
@@ -212,11 +219,11 @@ pledge_filter(uint64_t flags, uint64_t oldflags)
 		len += 3;
 
 	if (allow_ioctl_always || allow_ioctl_ioctl) {
-		len += 5;
+		len += 6;
 		if (allow_ioctl_always)
 			len += 12;
 		if (allow_ioctl_ioctl)
-			len += 18;
+			len += 21;
 	}
 
 	/* no new filters */
@@ -235,6 +242,7 @@ pledge_filter(uint64_t flags, uint64_t oldflags)
 	printf("allowfcntl %d\n", allow_fcntl);
 	printf("allow ioctl always %d\n", allow_ioctl_always);
 	printf("allow ioctl ioctl %d\n", allow_ioctl_ioctl);
+	printf("filter open %d\n", filter_open);
 
 	if (!(fprog = calloc(1, sizeof(struct sock_fprog))))
 		return 0;
@@ -250,6 +258,21 @@ pledge_filter(uint64_t flags, uint64_t oldflags)
 #define _ALLOW	_END-2
 
 	_LOAD_SYSCALL_NR;
+
+	if (filter_open) {
+		/* allow kill(0 | getpid(), ...) */
+		_JUMP_EQ(SYS_open, 0, 8);
+		_ARG32(1);
+		_JUMP_SET(O_RDWR, _EPERM, 0);
+		_JUMP_SET(O_WRONLY, _EPERM, 0);
+		_JUMP_SET(O_APPEND, _EPERM, 0);
+		_JUMP_SET(O_CREAT, _EPERM, 0);
+		/* O_TMPFILE and O_DIRECTORY conflict... */
+		/* _JUMP_SET(O_TMPFILE, _EPERM, 0); */
+		_JUMP_SET(O_TRUNC, _EPERM, 0);
+		_JUMP_SET(O_TRUNC, _EPERM, 0);
+		_LOAD_SYSCALL_NR;
+	}
 
 	if (allow_selfkill) {
 		pid_t pid = getpid();
@@ -316,7 +339,7 @@ pledge_filter(uint64_t flags, uint64_t oldflags)
 		/* allow ioctl(..., FIONREAD|FIONBIO|FIOCLEX|FIONCLEX, ...) */
 		_JUMP_EQ(SYS_ioctl, 0, 5 +
 		    (allow_ioctl_always ? 12 : 0) +
-		    (allow_ioctl_ioctl ? 18 : 0));
+		    (allow_ioctl_ioctl ? 21 : 0));
 		_ARG64(1); // 4
 		if (allow_ioctl_always) {
 			_JUMP_EQ64(FIONREAD, _ALLOW, 0);
@@ -330,6 +353,7 @@ pledge_filter(uint64_t flags, uint64_t oldflags)
 			_JUMP_EQ64(TCGETS, _JTRUE, 0);
 			_JUMP_EQ64(TIOCGWINSZ, _JTRUE, 0);
 			_JUMP_EQ64(TIOCGPGRP, _JTRUE, 0);
+			_JUMP_EQ64(TIOCSPGRP, _JTRUE, 0);
 			_JUMP_EQ64(TCSETSF, _JTRUE, 0);
 			_JUMP_EQ64(TCSETSW, _JTRUE, 0);
 		}
@@ -346,6 +370,8 @@ pledge_filter(uint64_t flags, uint64_t oldflags)
 #else
 	_RET(SECCOMP_RET_KILL);
 #endif
+
+	printf("length=%ld expected=%ld\n", (fp-fprog->filter), len);
 
 	return fprog;
 }

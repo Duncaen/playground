@@ -63,6 +63,12 @@ union arg64 {
 	fp++;                                                                  \
 } while (0)
 
+#define _JUMP_SET(v, t, f) do {                                                \
+	*fp = (struct sock_filter)BPF_JUMP(BPF_JMP+BPF_JSET+BPF_K,             \
+	    (v), (t), (f));                                                    \
+	fp++;                                                                  \
+} while (0)
+
 #define _JUMP_EQ64(val, jt, jf) do {                                           \
 	*fp = (struct sock_filter)BPF_JUMP(BPF_JMP+BPF_JEQ+BPF_K,              \
 	    ((union arg64){.u64 = (val)}).u32.hi, 0, (jf));                    \
